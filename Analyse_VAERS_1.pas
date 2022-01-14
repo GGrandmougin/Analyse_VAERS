@@ -23,8 +23,10 @@ type
   tlot = class
      nbmorts, nbgraves, nbinvalides, nbeffets : integer;
      numlot : string;
+     id_temp : string ;
      date : tdatetime;
-     fab : string;
+     fab, fab1, fab2, fab3 : string;
+     nb_fab1, nb_fab2, nb_fab3 : integer;
      procedure incremente( l_data : tstringlist);
      constructor create(nlot, fabriquant : string); overload;
      destructor destroy_;  overload;
@@ -35,6 +37,7 @@ type
     Erep_src: TEdit;
     Lrep_src: TLabel;
     Cbannee: TComboBox;
+    procedure traite_lots;
     procedure cree_sortie;
     function lit_lgn_vax(idx : integer): tstringlist;
     function lit_lgn_data(idx : integer): tstringlist;
@@ -81,7 +84,7 @@ var
   c_dates :  tsel_ch_dt = [RECVDATE,RPT_DATE,VAX_DATE,DATEDIED,TODAYS_DATE];
   date_lim : tdatetime;
   nb_champs : integer;
-
+  pr_nov20 : tdatetime;
 implementation
 
 
@@ -125,6 +128,7 @@ begin
     caption := 'Annalyse des données VAERS     V'  + getversion + '    Gérard Grandmougin';
     nb_champs := ord(high(tch_datas)) ;
     ord_SYMPTOM_TEXT := ord(SYMPTOM_TEXT);
+    pr_nov20 := strtodate('01/11/20');
 end;
 
 procedure TForm1.FormShow(Sender: TObject);
@@ -151,13 +155,13 @@ end;
 begin
     videobjets(ldata);
     FreeAndNil(ldata);
-    affiche('FreeAndNil(ldata)');
+//    affiche('FreeAndNil(ldata)');
     videobjets(lvax);
     FreeAndNil(lvax);
-    affiche('FreeAndNil(lvax)');
+//    affiche('FreeAndNil(lvax)');
     videobjets(llots);
     FreeAndNil(llots);
-    affiche('FreeAndNil(llots)');
+//    affiche('FreeAndNil(llots)');
     FreeAndNil(lsortie);
     
     FreeAndNil(lentree);
@@ -255,6 +259,7 @@ begin
    if (lvax.Count > 0) then lit_datas;
 //lsortie.SaveToFile('nb_champs_trouvés.txt');
    if (lvax.Count > 0) and (ldata.Count > 0)  then begin
+      traite_lots;
       cree_sortie;
    end else begin
       affiche('programme non éxécuté complément');
@@ -379,6 +384,8 @@ var
    //c : tsel_ch_dt;
    i : tch_datas;
    j, k : integer;
+   lot : tlot;
+   id : string;
 procedure complete;
 var
    l : integer;
@@ -391,81 +398,22 @@ begin
    for l := result.count to nb_champs  do begin
       result.add('');
    end;
-end; //ord_SYMPTOM_TEXT
-procedure traite_texte;
-var
-   l, m, nb, d, p : integer;
-   ok : boolean;
-   st : string ;
-begin
-   try
-      nb := result.Count ;
-      l := ord_SYMPTOM_TEXT;
-      //ok := false;
-      if leftstr(result.Strings[ord_SYMPTOM_TEXT], 1) = '"' then begin
-         repeat
-            inc(l);
-            ok := RightStr(result.Strings[l], 1) = '"';
-         until ok or (l >= nb -2) ;
-         if ok then begin
-            for m := ord_SYMPTOM_TEXT to l do  st := st + result.Strings[m];
-            result.Strings[ord_SYMPTOM_TEXT] := st;
-            d := l - ord_SYMPTOM_TEXT;
-            if l + d < nb then begin
-               for m :=  l downto  ord_SYMPTOM_TEXT + 1  do begin
-                   dec(nb);
-                   result.Strings[m ] := result.Strings[m + d];
-                   result.Delete(nb);
-               end;
-            end else begin
-               affiche('dépassement result.count dans traite_texte pour id = ' + result.Strings[0]);
-            end;
-         end;
-      end;
-      if (result.Count <> nb_champs + 1)  then begin
-        { nb := result.Count ;
-         p := ord_SYMPTOM_TEXT ;
-         repeat
-            inc(p);
-            ok := leftStr(result.Strings[l], 1) = '"';
-         until ok or (p >= nb -2) ;
-         if ok then begin
-            l := p;
-            repeat
-               inc(l);
-               ok := RightStr(result.Strings[l], 1) = '"';
-            until ok or (l >= nb -2) ;
-            if ok then begin
-               for m := p to l do  st := st + result.Strings[m];
-               result.Strings[p] := st;
-               d := l - p;
-               for m :=  l + d downto  l + 1  do begin
-                   dec(nb);
-                   result.Strings[m ] := result.Strings[m + d];
-                   result.Delete(nb);
-               end;
-            end;
-         end; }
-      end;
-   except
-      affiche('Erreur  dans traite_texte pour id = ' + result.Strings[0]);
-   end;
 end;
 begin
    result := tstringlist.Create;
    str2stl_glmt(lentree.strings[idx], result);
-   k := lvax.IndexOf(result.Strings[0]);
+   id := result.Strings[0];
+   k := lvax.IndexOf(id);
    if k <0 then begin
       FreeAndNil(result)
    end else begin
       if result.Count <> nb_champs + 1 then begin
-         //traite_texte;
          affiche(' result.count inccrect ( ' + inttostr(result.Count) + ' ) dans lit_lgn_data pour id = ' + result.Strings[0]);
       end;
       //lsortie.Add(inttostr(result.Count));
       if result.count <= nb_champs then complete;
       result.Add('') ;
-      result.Strings[ord_SYMPTOM_TEXT + 1] := inttostr(k);
+      result.Strings[nb_champs + 1] := inttostr(k);
 
       for i := low(tch_datas) to high(tch_datas) do begin
          if i in c_dates then begin
@@ -473,6 +421,15 @@ begin
             result.Strings[j] := changedate(result.Strings[j]);
          end;
       end;
+      lot := tlot(TStringList(lvax.objects[k]).Objects[0]);
+      lot.incremente(result );
+      inc(k);
+      while (k < lvax.count) and (id = lvax.Strings[k]) do begin
+         lot := tlot(TStringList(lvax.objects[k]).Objects[0]);
+         lot.incremente(result ); // lot.id_temp empêche d'incrémenter 2x les valeur d'un même lot
+         inc(k);
+      end;
+
 {      if result.count <= nb_champs then complete;
 {      if result.count < nb_champs then complete;
       if result.count > nb_champs then begin  // il faudra dans ce cas une procédure plus complexe que str2strlist  (nouvelle procedure passer en parametre count visé  et lancer procedure alternative ans cettte procedure)
@@ -499,24 +456,27 @@ var
    grave : boolean;
    st : string;
 begin  //  tch_datas = (VAERS_ID,RECVDATE,STATE,AGE_YRS,CAGE_YR,CAGE_MO,SEX,RPT_DATE,SYMPTOM_TEXT,DIED,DATEDIED,L_THREAT,ER_VISIT,HOSPITAL,HOSPDAYS,X_STAY,DISABLE,RECOVD,VAX_DATE,ONSET_DATE,NUMDAYS,LAB_DATA,V_ADMINBY,V_FUNDBY,OTHER_MEDS,CUR_ILL,HISTORY,PRIOR_VAX,SPLTTYPE,FORM_VERS,TODAYS_DATE,BIRTH_DEFECT,OFC_VISIT,ER_ED_VISIT,ALLERGIES);
-   inc(nbeffets);
-   grave := false;
-   if l_data.Strings[ord(DIED)] = 'Y' then inc(nbmorts);
-   if l_data.Strings[ord(DISABLE)] = 'Y'  then inc(nbinvalides);
-   for j := low(tch_datas) to high(tch_datas) do begin
-      if j in [DIED,L_THREAT,HOSPITAL,X_STAY,DISABLE,BIRTH_DEFECT] then begin
-         i := ord(j);
-         grave := grave or (l_data.Strings[i] = 'Y');
+   if l_data.Strings[0] <> id_temp then begin  // un même événement n'icrémenbtera pas 2x les cas
+      inc(nbeffets);
+      grave := false;
+      if l_data.Strings[ord(DIED)] = 'Y' then inc(nbmorts);
+      if l_data.Strings[ord(DISABLE)] = 'Y'  then inc(nbinvalides);
+      for j := low(tch_datas) to high(tch_datas) do begin
+         if j in [DIED,L_THREAT,HOSPITAL,X_STAY,DISABLE,BIRTH_DEFECT] then begin
+            i := ord(j);
+            grave := grave or (l_data.Strings[i] = 'Y');
+         end;
       end;
-   end;
-   if grave then inc(nbgraves);
-   st := l_data.Strings[ord(VAX_DATE)];
-   if length(st) = 10 then begin
-      try
-         dt := strtodate(st);
-         if dt < date then date := dt;
-      except
-      end;   
+      if grave then inc(nbgraves);
+      st := l_data.Strings[ord(VAX_DATE)];
+      if length(st) = 10 then begin
+         try
+            dt := strtodate(st);
+            if (dt < date) and (dt > pr_nov20) then date := dt;
+         except
+         end;
+      end;
+      id_temp := l_data.Strings[0];
    end;
 end;
 
@@ -524,7 +484,7 @@ function TForm1.lit_lgn_vax(idx: integer): tstringlist;
 var
    i : integer;
    lot : tlot;
-   st : string;
+   st, fb : string;
 begin
    result := tstringlist.Create;
    str2strlist(lentree.strings[idx], result);
@@ -534,6 +494,7 @@ begin
       FreeAndNil(result);
    end else begin
       st := uppercase(trim(st));
+      if ord(st[1]) < 48 then st := copy(st, 2 , length(st));
       if pos(' ', st) > 0 then st :=  StringReplace(st , ' ', '', [rfReplaceAll]);
       if copy(st, 1 , 7)  = 'UNKNOWN' then begin
          inc(nb_covid_sans_numlot);
@@ -541,9 +502,26 @@ begin
       end else begin
          result.Strings[3] := st;
          i := llots.IndexOf(st);
-         if (i >= 0)  { and (tlot(llots.Objects[i]).fab = trim(result.Strings[2]))} then begin
+         if (i >= 0)   then begin
             //result.Add(inttostr(i);
-            result.Objects[0] := llots.Objects[i];
+            lot := tlot(llots.Objects[i]);
+            result.Objects[0] := lot;
+            fb := trim(result.Strings[2]);
+            if fb <> '' then begin
+               if fb = lot.fab1 then begin
+                  inc(lot.nb_fab1);
+               end else if lot.fab2 = '' then begin
+                  lot.fab2 := fb;
+                  inc(lot.nb_fab2);
+               end else if fb = lot.fab2 then begin
+                  inc(lot.nb_fab2);
+               end else if lot.fab3 = '' then begin
+                  lot.fab3 := fb;
+                  inc(lot.nb_fab3);
+               end else if fb = lot.fab3 then begin
+                  inc(lot.nb_fab3);
+               end;   
+            end;
          end else begin
             {if i>=0 then begin
                lsortie.Add(result.Strings[3] ); // même N° lot pour 2 fabriquants différents
@@ -563,7 +541,8 @@ begin
    nbmorts := 0; nbgraves := 0; nbinvalides := 0; nbeffets := 0;
    numlot := trim(nlot);
    date := date_lim;
-   fab := trim(fabriquant);
+   fab1 := trim(fabriquant);
+   nb_fab1 :=1; nb_fab2 :=0; nb_fab3 :=0;
    form1.llots.AddObject(numlot, self);
 end;
 
@@ -579,7 +558,7 @@ var
    lot : tlot;
 begin
    lsortie.Clear;
-   affiche('début') ;
+   {affiche('début') ;
    n:= 0;
    k := ord(high(tch_datas)) +1;
    for i := 0 to ldata.Count- 1 do begin
@@ -599,7 +578,7 @@ begin
    end;
    if nb_incomplets > 0 then affiche( inttostr(nb_incomplets) + ' lignes data incomplètes' );
    if n > 0 then affiche( inttostr(n) + ' valeurs d''index incorectes' );
-   affiche('lots renseignés');
+   affiche('lots renseignés'); }
    genere_sortie('tous_effets');
    genere_sortie('cas_graves');
    genere_sortie('morts');
@@ -644,14 +623,12 @@ var
    fic, st : string;
    lot : tlot;
 begin
-{   genere_sortie('tous_effets');
-   genere_sortie('cas_graves');
-   genere_sortie('morts');}
    p := 2;
    if degre = 'tous_effets' then p := 0;
    if degre = 'cas_graves' then p := 1;
    lsortie.Clear;
    affiche('debut');
+   lsortie.Add('date,numero lot,fabriquant,nombre,');
    for i := 0 to llots.count - 1 do begin
       lot := tlot(llots.Objects[i]);
       st := datetostr(lot.date) + ',';
@@ -660,17 +637,37 @@ begin
           1:  n := lot.nbgraves;
       else
           n := lot.nbmorts;
-      end;    
-      st := st + lot.numlot + ',' + lot.fab + ',' + inttostr(n);
-      lsortie.add(st);
+      end;
+      if length(lot.numlot) >= 4 then begin
+         st := st + lot.numlot + ',' + lot.fab + ',' + inttostr(n) + ',';
+         lsortie.add(st);
+      end;
       if i mod 1000 = 0 then begin
          memo1.Lines[memo1.lines.count -1 ] := inttostr(i );
          memo1.Refresh;
       end;
    end;
    fic := repertoire + cbannee.Text + degre + '.csv';
-   lsortie.SaveToFile( fic);
-   affiche('fichier créé: ' +fic);
+   try
+      lsortie.SaveToFile( fic);
+      affiche('fichier créé: ' +fic);
+   except
+      affiche('Erreur de création du fchier: ' + fic);
+   end;
+end;
+
+procedure TForm1.traite_lots;
+var
+   i : integer;
+   lot : tlot;
+begin
+   for i := 0 to llots.Count - 1 do begin
+      lot :=  tlot(llots.Objects[i]);
+      with lot do begin
+         if (nb_fab1 >= nb_fab2) and (nb_fab1 >= nb_fab2) then fab := fab1 else
+         if (nb_fab2 >= nb_fab3) and (nb_fab2 >= nb_fab1) then fab := fab2 else fab := fab3 ;
+      end;
+   end;
 end;
 
 end.
