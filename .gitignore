@@ -72,5 +72,5 @@ modules/
 # Autre
 *.pdf
 *.ods
-VAERS\
-infos\
+VAERS/
+infos/
