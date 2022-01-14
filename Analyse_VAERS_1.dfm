@@ -19,9 +19,11 @@ object Form1: TForm1
   object Lrep_src: TLabel
     Left = 24
     Top = 16
-    Width = 84
+    Width = 462
     Height = 13
-    Caption = 'R'#233'pertoire source'
+    Caption = 
+      'R'#233'pertoire source  (si vide = VAERS\ )  (fichiers .CSV venant de' +
+      ' https://vaers.hhs.gov/data.html )'
   end
   object Memo1: TMemo
     Left = 24

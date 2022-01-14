@@ -1,10 +1,15 @@
 unit Analyse_VAERS_1;
 
 interface
-
+{
+- parcourr llots pour concatener lots avec vraissemblement même N°
+- fab  fab1 nbfab1 fab2 nbfab2  fab3 nbfab3   mettre dans fab le majoritaire
+- faire tlot.incrémente dès le remplissage de ldata
+- lors du remplissage de ldata, voir lvax avec même ID
+}
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls;
+  Dialogs, StdCtrls, StrUtils;
 
 const
     fic_data = 'VAERSDATA.CSV';
@@ -42,6 +47,7 @@ type
     function getversion: String;
     procedure enregistre(fichier : string);
     procedure str2strlist( txt : string; sl : tstringlist);
+    procedure str2stl_glmt(txt: string; sl: tstringlist);
     function strlist2str(sl : tstringlist) : string;
     procedure termine;
     procedure genere_sortie( degre : string);
@@ -63,6 +69,7 @@ type
     llgn_sortie : tstringlist;
     slgn_e, slgn_s :string;
     repertoire : string;
+    ord_SYMPTOM_TEXT : integer;
   end;
 
 var
@@ -73,7 +80,10 @@ var
   nb_covid_sans_numlot : integer = 0;
   c_dates :  tsel_ch_dt = [RECVDATE,RPT_DATE,VAX_DATE,DATEDIED,TODAYS_DATE];
   date_lim : tdatetime;
+  nb_champs : integer;
+
 implementation
+
 
 {$R *.dfm}
 
@@ -113,7 +123,8 @@ begin
     llgn_entree := tstringlist.create;
     llgn_sortie := tstringlist.create;
     caption := 'Annalyse des données VAERS     V'  + getversion + '    Gérard Grandmougin';
-
+    nb_champs := ord(high(tch_datas)) ;
+    ord_SYMPTOM_TEXT := ord(SYMPTOM_TEXT);
 end;
 
 procedure TForm1.FormShow(Sender: TObject);
@@ -178,6 +189,37 @@ begin
    sl.Text := StringReplace(txt, ',' , #13#10 , [rfReplaceAll	] ) ;
 end;
 
+procedure TForm1.str2stl_glmt(txt: string; sl: tstringlist);
+var
+   p : integer;
+   texte : string;
+function paire_glmt : boolean ;  //paire guillemets
+var
+   i, j : integer;
+   st : string;
+begin
+   result := true;
+   i := posex('"', texte, p + 1);
+   if i > 0 then begin
+      j := posex('"', texte, i + 1);
+      if j > 0 then begin
+         st := copy(texte, i + 1 , j - i);
+         st := StringReplace(st, ',', ';' , [rfReplaceAll]);
+         texte := copy(texte, 1, i) + st + copy(texte, j + 1, length(texte));
+         p := j;
+         result := false;
+      end;
+   end;
+end;
+begin
+   p := 0;
+   texte := txt + ',';
+   repeat
+   until paire_glmt ;
+   sl.Clear;
+   sl.Text := StringReplace(texte, ',' , #13#10 , [rfReplaceAll	] ) ;
+end;
+
 function TForm1.strlist2str(sl: tstringlist): string;
 begin
    result :=  StringReplace(sl.text , #13#10, ',' , [rfReplaceAll	] ) ;
@@ -211,6 +253,7 @@ begin
    if repertoire[length(repertoire)] <> '\' then repertoire := repertoire + '\' ;
    lit_vaxs;
    if (lvax.Count > 0) then lit_datas;
+//lsortie.SaveToFile('nb_champs_trouvés.txt');
    if (lvax.Count > 0) and (ldata.Count > 0)  then begin
       cree_sortie;
    end else begin
@@ -345,19 +388,94 @@ begin
       aj_1_ligne;
    end ;
    inc(nb_incomplets);
-   for l := result.count to 35  do begin
-      result.add(',');
+   for l := result.count to nb_champs  do begin
+      result.add('');
+   end;
+end; //ord_SYMPTOM_TEXT
+procedure traite_texte;
+var
+   l, m, nb, d, p : integer;
+   ok : boolean;
+   st : string ;
+begin
+   try
+      nb := result.Count ;
+      l := ord_SYMPTOM_TEXT;
+      //ok := false;
+      if leftstr(result.Strings[ord_SYMPTOM_TEXT], 1) = '"' then begin
+         repeat
+            inc(l);
+            ok := RightStr(result.Strings[l], 1) = '"';
+         until ok or (l >= nb -2) ;
+         if ok then begin
+            for m := ord_SYMPTOM_TEXT to l do  st := st + result.Strings[m];
+            result.Strings[ord_SYMPTOM_TEXT] := st;
+            d := l - ord_SYMPTOM_TEXT;
+            if l + d < nb then begin
+               for m :=  l downto  ord_SYMPTOM_TEXT + 1  do begin
+                   dec(nb);
+                   result.Strings[m ] := result.Strings[m + d];
+                   result.Delete(nb);
+               end;
+            end else begin
+               affiche('dépassement result.count dans traite_texte pour id = ' + result.Strings[0]);
+            end;
+         end;
+      end;
+      if (result.Count <> nb_champs + 1)  then begin
+        { nb := result.Count ;
+         p := ord_SYMPTOM_TEXT ;
+         repeat
+            inc(p);
+            ok := leftStr(result.Strings[l], 1) = '"';
+         until ok or (p >= nb -2) ;
+         if ok then begin
+            l := p;
+            repeat
+               inc(l);
+               ok := RightStr(result.Strings[l], 1) = '"';
+            until ok or (l >= nb -2) ;
+            if ok then begin
+               for m := p to l do  st := st + result.Strings[m];
+               result.Strings[p] := st;
+               d := l - p;
+               for m :=  l + d downto  l + 1  do begin
+                   dec(nb);
+                   result.Strings[m ] := result.Strings[m + d];
+                   result.Delete(nb);
+               end;
+            end;
+         end; }
+      end;
+   except
+      affiche('Erreur  dans traite_texte pour id = ' + result.Strings[0]);
    end;
 end;
 begin
    result := tstringlist.Create;
-   str2strlist(lentree.strings[idx], result);
+   str2stl_glmt(lentree.strings[idx], result);
    k := lvax.IndexOf(result.Strings[0]);
    if k <0 then begin
       FreeAndNil(result)
    end else begin
-      if result.count < 35 then complete;
-      if result.count > 35 then begin  // il faudra dans ce cas une procédure plus complexe que str2strlist  (nouvelle procedure passer en parametre count visé  et lancer procedure alternative ans cettte procedure)
+      if result.Count <> nb_champs + 1 then begin
+         //traite_texte;
+         affiche(' result.count inccrect ( ' + inttostr(result.Count) + ' ) dans lit_lgn_data pour id = ' + result.Strings[0]);
+      end;
+      //lsortie.Add(inttostr(result.Count));
+      if result.count <= nb_champs then complete;
+      result.Add('') ;
+      result.Strings[ord_SYMPTOM_TEXT + 1] := inttostr(k);
+
+      for i := low(tch_datas) to high(tch_datas) do begin
+         if i in c_dates then begin
+            j := ord(i);
+            result.Strings[j] := changedate(result.Strings[j]);
+         end;
+      end;
+{      if result.count <= nb_champs then complete;
+{      if result.count < nb_champs then complete;
+      if result.count > nb_champs then begin  // il faudra dans ce cas une procédure plus complexe que str2strlist  (nouvelle procedure passer en parametre count visé  et lancer procedure alternative ans cettte procedure)
 FreeAndNil(result)
 end else begin
          result.Add(inttostr(k));
@@ -367,9 +485,11 @@ end else begin
                result.Strings[j] := changedate(result.Strings[j]);
             end;
          end;
-end;
+end;}
    end;
 end;
+
+
 
 procedure tlot.incremente(l_data : tstringlist);
 var
