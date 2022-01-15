@@ -3,9 +3,7 @@ unit Analyse_VAERS_1;
 interface
 {
 - parcourr llots pour concatener lots avec vraissemblement même N°
-- fab  fab1 nbfab1 fab2 nbfab2  fab3 nbfab3   mettre dans fab le majoritaire
-- faire tlot.incrémente dès le remplissage de ldata
-- lors du remplissage de ldata, voir lvax avec même ID
+
 }
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
@@ -25,8 +23,11 @@ type
      numlot : string;
      id_temp : string ;
      date : tdatetime;
+     date_mlt : tdatetime; //remplie lorsqu'un même événement concerne plusieurs lots sera utilisée si pas d'autre info disponible
      fab, fab1, fab2, fab3 : string;
      nb_fab1, nb_fab2, nb_fab3 : integer;
+     procedure maj_date( l_data : tstringlist);
+     procedure maj_date_mlt( l_data : tstringlist);
      procedure incremente( l_data : tstringlist);
      constructor create(nlot, fabriquant : string); overload;
      destructor destroy_;  overload;
@@ -252,7 +253,7 @@ procedure TForm1.BDemarrerClick(Sender: TObject);
 begin
    BDemarrer.Enabled := false;
    affiche('Patientez..');
-   date_lim := strtodate('31/12/' + cbannee.Text);
+   date_lim := strtodate('31/12/' + cbannee.Text) + 1 ;
    if trim(Erep_src.Text) <>'' then repertoire := trim(Erep_src.Text) else  repertoire := rep_fic;
    if repertoire[length(repertoire)] <> '\' then repertoire := repertoire + '\' ;
    lit_vaxs;
@@ -386,6 +387,7 @@ var
    j, k : integer;
    lot : tlot;
    id : string;
+   unique : boolean;
 procedure complete;
 var
    l : integer;
@@ -423,12 +425,16 @@ begin
       end;
       lot := tlot(TStringList(lvax.objects[k]).Objects[0]);
       lot.incremente(result );
+      unique := true;
       inc(k);
       while (k < lvax.count) and (id = lvax.Strings[k]) do begin
+         unique := false;
          lot := tlot(TStringList(lvax.objects[k]).Objects[0]);
          lot.incremente(result ); // lot.id_temp empêche d'incrémenter 2x les valeur d'un même lot
+         lot.maj_date_mlt(result);
          inc(k);
       end;
+      if unique then lot.maj_date(result);
 
 {      if result.count <= nb_champs then complete;
 {      if result.count < nb_champs then complete;
@@ -450,11 +456,10 @@ end;
 
 procedure tlot.incremente(l_data : tstringlist);
 var
-   dt : TDate;
    i : integer;
    j : tch_datas;     // VAX_DATE
    grave : boolean;
-   st : string;
+   //st : string;
 begin  //  tch_datas = (VAERS_ID,RECVDATE,STATE,AGE_YRS,CAGE_YR,CAGE_MO,SEX,RPT_DATE,SYMPTOM_TEXT,DIED,DATEDIED,L_THREAT,ER_VISIT,HOSPITAL,HOSPDAYS,X_STAY,DISABLE,RECOVD,VAX_DATE,ONSET_DATE,NUMDAYS,LAB_DATA,V_ADMINBY,V_FUNDBY,OTHER_MEDS,CUR_ILL,HISTORY,PRIOR_VAX,SPLTTYPE,FORM_VERS,TODAYS_DATE,BIRTH_DEFECT,OFC_VISIT,ER_ED_VISIT,ALLERGIES);
    if l_data.Strings[0] <> id_temp then begin  // un même événement n'icrémenbtera pas 2x les cas
       inc(nbeffets);
@@ -468,15 +473,37 @@ begin  //  tch_datas = (VAERS_ID,RECVDATE,STATE,AGE_YRS,CAGE_YR,CAGE_MO,SEX,RPT_
          end;
       end;
       if grave then inc(nbgraves);
-      st := l_data.Strings[ord(VAX_DATE)];
-      if length(st) = 10 then begin
-         try
-            dt := strtodate(st);
-            if (dt < date) and (dt > pr_nov20) then date := dt;
-         except
-         end;
-      end;
       id_temp := l_data.Strings[0];
+   end;
+end;
+
+procedure tlot.maj_date(l_data: tstringlist);
+var
+   st : string;
+   dt : TDate;
+begin
+   st := l_data.Strings[ord(VAX_DATE)];
+   if length(st) = 10 then begin
+      try
+         dt := strtodate(st);
+         if (dt < date) and (dt > pr_nov20) then date := dt;
+      except
+      end;
+   end;
+end;
+
+procedure tlot.maj_date_mlt(l_data: tstringlist);
+var
+   st : string;
+   dt : TDate;
+begin
+   st := l_data.Strings[ord(VAX_DATE)];
+   if length(st) = 10 then begin
+      try
+         dt := strtodate(st);
+         if (dt < date_mlt) and (dt > pr_nov20) then date_mlt := dt;
+      except
+      end;
    end;
 end;
 
@@ -541,6 +568,7 @@ begin
    nbmorts := 0; nbgraves := 0; nbinvalides := 0; nbeffets := 0;
    numlot := trim(nlot);
    date := date_lim;
+   date_mlt := date_lim;
    fab1 := trim(fabriquant);
    nb_fab1 :=1; nb_fab2 :=0; nb_fab3 :=0;
    form1.llots.AddObject(numlot, self);
@@ -664,10 +692,13 @@ begin
    for i := 0 to llots.Count - 1 do begin
       lot :=  tlot(llots.Objects[i]);
       with lot do begin
-         if (nb_fab1 >= nb_fab2) and (nb_fab1 >= nb_fab2) then fab := fab1 else
+         if (nb_fab1 >= nb_fab2) and (nb_fab1 >= nb_fab3) then fab := fab1 else
          if (nb_fab2 >= nb_fab3) and (nb_fab2 >= nb_fab1) then fab := fab2 else fab := fab3 ;
+         if date = date_lim then date := date_mlt;
       end;
    end;
 end;
+
+
 
 end.
